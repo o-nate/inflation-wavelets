@@ -19,7 +19,7 @@ from src import (
     phase_diff_key,
     phase_diff_sines,
     regression,
-    xwt,
+    wct,
 )
 from src.utils import helpers
 from src.utils.logging_helpers import define_other_module_log_level
@@ -29,8 +29,8 @@ from scripts.utils.helpers import (
     create_cwt_results_dict,
     create_dwt_dict,
     create_dwt_results_dict,
-    create_xwt_dict,
-    create_xwt_results_dict,
+    create_wct_dict,
+    create_wct_results_dict,
 )
 
 # * Logging settings
@@ -461,7 +461,7 @@ plt.show()
 
 
 # %% [markdown]
-### 3.2.3) Time series co-movements: Cross wavelet transforms and phase difference
+### 3.2.3) Time series co-movements: Wavelet coherence transforms and phase difference
 phase_diff_key.plot_phase_difference_key(export=False)
 
 # %%
@@ -472,20 +472,19 @@ comparisons = (
 )
 
 # * Pre-process data: Standardize and detrend
-xwt_dict = create_xwt_dict(
+wct_dict = create_wct_dict(
     us_data,
     comparisons,
     detrend=False,
     remove_mean=True,
 )
 
-xwt_results_dict = create_xwt_results_dict(
-    xwt_dict,
+wct_results_dict = create_wct_results_dict(
+    wct_dict,
     comparisons,
-    ignore_strong_trends=False,
 )
 
-# * Plot XWT power spectrum
+# * Plot WCT coherence spectrum
 TOTAL_SUBPLOTS = len(comparisons)
 PLOT_COLS = TOTAL_SUBPLOTS // 2
 PLOT_ROWS = 2
@@ -499,22 +498,22 @@ for i, comp in enumerate(comparisons):
     POSITION = i + 1
     ax = fig.add_subplot(PLOT_ROWS, PLOT_COLS, POSITION)
     axes.append(ax)
-    xwt.plot_xwt(
+    wct.plot_wct(
         ax,
-        xwt_dict[comp],
-        xwt_results_dict[comp],
+        wct_dict[comp],
+        wct_results_dict[comp],
         include_significance=True,
         include_cone_of_influence=True,
         include_phase_difference=True,
-        **results_configs.XWT_PLOT_PROPS,
+        **wct.WCT_PLOT_PROPS,
     )
     # * Invert y axis
     ax.set_ylim(ax.get_ylim()[::-1])
 
     # * Set y axis tick labels
     y_ticks = 2 ** np.arange(
-        np.ceil(np.log2(xwt_results_dict[comp].period.min())),
-        np.ceil(np.log2(xwt_results_dict[comp].period.max())),
+        np.ceil(np.log2(wct_results_dict[comp].period.min())),
+        np.ceil(np.log2(wct_results_dict[comp].period.max())),
     )
     ax.set_yticks(np.log2(y_ticks))
     if i == 0:
@@ -524,7 +523,7 @@ for i, comp in enumerate(comparisons):
     else:
         ## Right-hand column use y axis from left-hand column
         ax.tick_params("y", labelleft=False)
-    ax.set_title(f"{comp[0]} X {comp[1]} (US)")
+    ax.set_title(f"{comp[0]} WCT {comp[1]} (US)")
 for i, ax in enumerate(axes[1:]):
     ax.sharex(axes[0])
 

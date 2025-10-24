@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple, Type
 import pandas as pd
 
 from constants import ids, results_configs
-from src import cwt, dwt, xwt
+from src import cwt, dwt, wct
 from src.utils import wavelet_helpers
 from src.utils.logging_helpers import define_other_module_log_level
 
@@ -51,18 +51,18 @@ def create_cwt_dict(
     return transform_dict
 
 
-def create_xwt_dict(
-    data_for_xwt: pd.DataFrame, xwt_list: List[Tuple[str, str]], **kwargs
-) -> Dict[Tuple[str, str], Type[xwt.DataForXWT]]:
-    """Create dict of cross-wavelet transform objects from DataFrame"""
+def create_wct_dict(
+    data_for_wct: pd.DataFrame, wct_list: List[Tuple[str, str]], **kwargs
+) -> Dict[Tuple[str, str], Type[wct.DataForWCT]]:
+    """Create dict of wavelet coherence transform objects from DataFrame"""
     transform_dict = {}
-    for comparison in xwt_list:
-        y1 = data_for_xwt.dropna()[comparison[0]].to_numpy()
-        y2 = data_for_xwt.dropna()[comparison[1]].to_numpy()
+    for comparison in wct_list:
+        y1 = data_for_wct.dropna()[comparison[0]].to_numpy()
+        y2 = data_for_wct.dropna()[comparison[1]].to_numpy()
         y1 = wavelet_helpers.standardize_series(y1, **kwargs)
         y2 = wavelet_helpers.standardize_series(y2, **kwargs)
 
-        transform_dict[comparison] = xwt.DataForXWT(
+        transform_dict[comparison] = wct.DataForWCT(
             y1_values=y1,
             y2_values=y2,
             mother_wavelet=results_configs.XWT_MOTHER_DICT[results_configs.XWT_MOTHER],
@@ -94,13 +94,13 @@ def create_cwt_results_dict(
     return results_dict
 
 
-def create_xwt_results_dict(
-    xwt_data_dict: Dict[str, Type[xwt.DataForXWT]],
-    xwt_list: List[Tuple[str, str]],
+def create_wct_results_dict(
+    wct_data_dict: Dict[str, Type[wct.DataForWCT]],
+    wct_list: List[Tuple[str, str]],
     **kwargs,
-) -> Type[xwt.ResultsFromXWT]:
-    """Create dict of XWT results instances"""
+) -> Type[wct.ResultsFromWCT]:
+    """Create dict of WCT results instances"""
     results_dict = {}
-    for comparison in xwt_list:
-        results_dict[comparison] = xwt.run_xwt(xwt_data_dict[comparison], **kwargs)
+    for comparison in wct_list:
+        results_dict[comparison] = wct.run_wct(wct_data_dict[comparison], **kwargs)
     return results_dict

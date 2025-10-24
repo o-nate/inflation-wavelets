@@ -94,7 +94,7 @@ class ResultsFromWCT:
 
 def run_wct(
     wavelet_coherence_transform: Type[DataForWCT],
-    significance_level: float = 0.8646,
+    significance_level: float = 0.95,
 ) -> Type[ResultsFromWCT]:
     """Conduct Wavelet Coherence Transformation on two series.
     Returns coherence magnitude, period, significance levels, cone of influence,
