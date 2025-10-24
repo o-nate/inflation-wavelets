@@ -177,12 +177,14 @@ def plot_smoothing(
         ## Subplot for each smooth signal
         # plt.subplot(len(smooth_signals), 1, i)
         axs[i - 1].plot(original_t, original_y, label="Original")
-        axs[i - 1].plot(original_t, signal["signal"])
+        axs[i - 1].plot(
+            original_t, signal["signal"], label=rf"$S_{{j-{smooth_level}}}$"
+        )
         axs[i - 1].set_title(rf"Approximation: $S_{{j-{smooth_level}}}$", size=15)
         if i - 1 == 0:
             axs[i - 1].legend(loc="upper right")
         else:
-            axs[i - 1].legend("", frameon=False)
+            axs[i - 1].legend(loc="upper right")
     return fig
 
 
@@ -190,7 +192,7 @@ def main() -> None:
     """Run script"""
 
     raw_data = retrieve_data.get_fed_data(ids.US_INF_EXPECTATIONS)
-    _, t, y = retrieve_data.clean_fed_data(raw_data)
+    df, t, y = retrieve_data.clean_fed_data(raw_data)
 
     # * Create instance of DataForDWT class
     data_for_dwt = DataForDWT(y, MOTHER)
@@ -200,6 +202,8 @@ def main() -> None:
     results_from_dwt.smooth_signal(
         y_values=data_for_dwt.y_values, mother_wavelet=data_for_dwt.mother_wavelet
     )
+
+    logger.debug("start: %s, end: %s", df.date.min(), df.date.max())
 
     fig = plot_smoothing(
         smooth_signals=results_from_dwt.smoothed_signal_dict,

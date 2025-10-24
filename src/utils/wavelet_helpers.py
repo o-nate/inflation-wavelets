@@ -127,15 +127,31 @@ def plot_cone_of_influence(
     color = kwargs["coi_color"]
     alpha = kwargs["coi_alpha"]
     hatch = kwargs["coi_hatch"]
-    t_array = np.concatenate(
-        [
-            t_values,
-            t_values[-1:] + dt,
-            t_values[-1:] + dt,
-            t_values[:1] - dt,
-            t_values[:1] - dt,
-        ]
-    )
+
+    # Handle datetime values properly
+    if np.issubdtype(t_values.dtype, np.datetime64):
+        # Convert dt to timedelta for datetime arithmetic
+        dt_timedelta = np.timedelta64(int(dt * 365.25 * 24 * 60 * 60 * 1000000), "us")
+        t_array = np.concatenate(
+            [
+                t_values,
+                t_values[-1:] + dt_timedelta,
+                t_values[-1:] + dt_timedelta,
+                t_values[:1] - dt_timedelta,
+                t_values[:1] - dt_timedelta,
+            ]
+        )
+    else:
+        # Original behavior for non-datetime values
+        t_array = np.concatenate(
+            [
+                t_values,
+                t_values[-1:] + dt,
+                t_values[-1:] + dt,
+                t_values[:1] - dt,
+                t_values[:1] - dt,
+            ]
+        )
     if tranform_type == "cwt":
         coi_array = np.concatenate(
             [
