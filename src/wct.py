@@ -75,9 +75,13 @@ class DataForWCT:
     delta_j: float
     initial_scale: float
     levels: List[float]
+    actual_times: npt.NDArray = None  # Optional actual time values
 
     def __post_init__(self):
-        self.t_values = np.linspace(1, self.y1_values.size + 1, self.y1_values.size)
+        if self.actual_times is not None:
+            self.t_values = self.actual_times
+        else:
+            self.t_values = np.linspace(1, self.y1_values.size + 1, self.y1_values.size)
 
 
 @dataclass
