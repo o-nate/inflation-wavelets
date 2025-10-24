@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -19,9 +20,9 @@ from src import (
     phase_diff_key,
     phase_diff_sines,
     regression,
-    xwt,
+    wct,
 )
-from src.utils import helpers
+from src.utils import helpers, wavelet_helpers
 from src.utils.logging_helpers import define_other_module_log_level
 from src import retrieve_data
 from scripts.utils.helpers import (
@@ -29,8 +30,11 @@ from scripts.utils.helpers import (
     create_cwt_results_dict,
     create_dwt_dict,
     create_dwt_results_dict,
-    create_xwt_dict,
-    create_xwt_results_dict,
+    create_wct_dict,
+    create_wct_results_dict,
+    process_wavelet_transforms,
+    process_wavelet_pairs,
+    ProcessingConfig,
 )
 
 # * Logging settings
@@ -325,12 +329,23 @@ dwt_measures = [
     ids.DIFF_LOG_REAL_DURABLES,
     ids.DIFF_LOG_REAL_SAVINGS,
 ]
-dwt_dict = create_dwt_dict(
-    us_data.dropna(), dwt_measures, mother_wavelet=results_configs.DWT_MOTHER_WAVELET
+
+# * Process DWTs using new generic function
+dwt_config = ProcessingConfig(
+    mother_wavelet=results_configs.DWT_MOTHER_WAVELET,
+    delta_t=0,  # Not used for DWT
+    delta_j=0,  # Not used for DWT
+    initial_scale=0,  # Not used for DWT
+    levels=[],
 )
 
-# * Run DWTs
-dwt_results_dict = create_dwt_results_dict(dwt_dict, dwt_measures)
+dwt_results_dict = process_wavelet_transforms(
+    data=us_data.dropna(),
+    measures=dwt_measures,
+    data_class=dwt.DataForDWT,
+    compute_function=dwt.run_dwt,
+    config=dwt_config,
+)
 
 # * Numpy array for date
 t = us_data.dropna()[ids.DATE].to_numpy()
@@ -355,15 +370,25 @@ plt.legend("", frameon=False)
 
 # %% [markdown]
 ## Figure 6 - Smoothing of expectations
+# Create DWT data object for smoothing using the same standardized data
+# that was used in the processing
+y_values = us_data.dropna()[ids.EXPECTATIONS].to_numpy()
+y_values = wavelet_helpers.standardize_series(y_values, detrend=False, remove_mean=True)
+
+dwt_data = dwt.DataForDWT(
+    y_values=y_values,
+    mother_wavelet=results_configs.DWT_MOTHER_WAVELET,
+)
+
 dwt_results_dict[ids.EXPECTATIONS].smooth_signal(
-    y_values=dwt_dict[ids.EXPECTATIONS].y_values,
-    mother_wavelet=dwt_dict[ids.EXPECTATIONS].mother_wavelet,
+    y_values=dwt_data.y_values,
+    mother_wavelet=dwt_data.mother_wavelet,
 )
 
 fig = dwt.plot_smoothing(
     dwt_results_dict[ids.EXPECTATIONS].smoothed_signal_dict,
     t,
-    dwt_dict[ids.EXPECTATIONS].y_values,
+    dwt_data.y_values,
     ascending=True,
     figsize=(15, 20),
     sharex=True,
@@ -419,9 +444,8 @@ cwt_measures = {
     # # # ids.REAL_DURABLES,
     # # # ids.REAL_SAVINGS,
 }
-cwt_dict = create_cwt_dict(
-    us_data.dropna(),
-    cwt_measures,
+# * Process CWTs using new generic function
+cwt_config = ProcessingConfig(
     mother_wavelet=results_configs.CWT_MOTHER,
     delta_t=results_configs.DT,
     delta_j=results_configs.DJ,
@@ -429,8 +453,13 @@ cwt_dict = create_cwt_dict(
     levels=results_configs.LEVELS,
 )
 
-cwt_results_dict = create_cwt_results_dict(
-    cwt_dict, cwt_measures.keys(), normalize=True
+cwt_results_dict = process_wavelet_transforms(
+    data=us_data.dropna(),
+    measures=list(cwt_measures.keys()),
+    data_class=cwt.DataForCWT,
+    compute_function=cwt.run_cwt,
+    config=cwt_config,
+    normalize=True,
 )
 
 # %%
@@ -440,9 +469,21 @@ plt.close("all")
 
 for measure, cwt_result in cwt_results_dict.items():
     fig, ax = plt.subplots(1, **results_configs.CWT_FIG_PROPS)
+
+    # Create CWT data object for plotting
+    cwt_data = cwt.DataForCWT(
+        t_values=us_data.dropna()[ids.DATE].to_numpy(),
+        y_values=us_data.dropna()[measure].to_numpy(),
+        mother_wavelet=results_configs.CWT_MOTHER,
+        delta_t=results_configs.DT,
+        delta_j=results_configs.DJ,
+        initial_scale=results_configs.S0,
+        levels=results_configs.LEVELS,
+    )
+
     cwt.plot_cwt(
         ax,
-        cwt_dict[measure],
+        cwt_data,
         cwt_result,
         **results_configs.CWT_PLOT_PROPS,
     )
@@ -461,7 +502,7 @@ plt.show()
 
 
 # %% [markdown]
-### 3.2.3) Time series co-movements: Cross wavelet transforms and phase difference
+### 3.2.3) Time series co-movements: Wavelet coherence transforms and phase difference
 phase_diff_key.plot_phase_difference_key(export=False)
 
 # %%
@@ -471,21 +512,26 @@ comparisons = (
     + [(ids.EXPECTATIONS, ids.SAVINGS_CHG)]
 )
 
-# * Pre-process data: Standardize and detrend
-xwt_dict = create_xwt_dict(
-    us_data,
-    comparisons,
+# * Process WCTs using new generic function
+wct_config = ProcessingConfig(
+    mother_wavelet=results_configs.XWT_MOTHER_DICT[results_configs.XWT_MOTHER],
+    delta_t=results_configs.XWT_DT,
+    delta_j=results_configs.XWT_DJ,
+    initial_scale=results_configs.XWT_S0,
+    levels=results_configs.LEVELS,
     detrend=False,
     remove_mean=True,
 )
 
-xwt_results_dict = create_xwt_results_dict(
-    xwt_dict,
-    comparisons,
-    ignore_strong_trends=False,
+wct_results_dict = process_wavelet_pairs(
+    data=us_data,
+    pairs=comparisons,
+    data_class=wct.DataForWCT,
+    compute_function=wct.run_wct,
+    config=wct_config,
 )
 
-# * Plot XWT power spectrum
+# * Plot WCT coherence spectrum
 TOTAL_SUBPLOTS = len(comparisons)
 PLOT_COLS = TOTAL_SUBPLOTS // 2
 PLOT_ROWS = 2
@@ -499,22 +545,43 @@ for i, comp in enumerate(comparisons):
     POSITION = i + 1
     ax = fig.add_subplot(PLOT_ROWS, PLOT_COLS, POSITION)
     axes.append(ax)
-    xwt.plot_xwt(
+    # Create data object for plotting (needed for wct.plot_wct)
+    # Get data without NaN values to ensure alignment
+    clean_data = us_data[[comp[0], comp[1], ids.DATE]].dropna()
+    y1 = clean_data[comp[0]].to_numpy()
+    y2 = clean_data[comp[1]].to_numpy()
+    actual_times = clean_data[ids.DATE].to_numpy()
+
+    y1 = wavelet_helpers.standardize_series(y1, detrend=False, remove_mean=True)
+    y2 = wavelet_helpers.standardize_series(y2, detrend=False, remove_mean=True)
+
+    wct_data = wct.DataForWCT(
+        y1_values=y1,
+        y2_values=y2,
+        mother_wavelet=results_configs.XWT_MOTHER_DICT[results_configs.XWT_MOTHER],
+        delta_t=results_configs.XWT_DT,
+        delta_j=results_configs.XWT_DJ,
+        initial_scale=results_configs.XWT_S0,
+        levels=results_configs.LEVELS,
+        actual_times=actual_times,
+    )
+
+    wct.plot_wct(
         ax,
-        xwt_dict[comp],
-        xwt_results_dict[comp],
+        wct_data,
+        wct_results_dict[comp],
         include_significance=True,
         include_cone_of_influence=True,
         include_phase_difference=True,
-        **results_configs.XWT_PLOT_PROPS,
+        **wct.WCT_PLOT_PROPS,
     )
     # * Invert y axis
     ax.set_ylim(ax.get_ylim()[::-1])
 
     # * Set y axis tick labels
     y_ticks = 2 ** np.arange(
-        np.ceil(np.log2(xwt_results_dict[comp].period.min())),
-        np.ceil(np.log2(xwt_results_dict[comp].period.max())),
+        np.ceil(np.log2(wct_results_dict[comp].period.min())),
+        np.ceil(np.log2(wct_results_dict[comp].period.max())),
     )
     ax.set_yticks(np.log2(y_ticks))
     if i == 0:
@@ -524,9 +591,18 @@ for i, comp in enumerate(comparisons):
     else:
         ## Right-hand column use y axis from left-hand column
         ax.tick_params("y", labelleft=False)
-    ax.set_title(f"{comp[0]} X {comp[1]} (US)")
+    ax.set_title(f"{comp[0]} WCT {comp[1]} (US)")
 for i, ax in enumerate(axes[1:]):
     ax.sharex(axes[0])
+
+# * Format x-axis as dates
+for ax in axes:
+    # Convert numpy datetime64 to matplotlib dates
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    ax.xaxis.set_major_locator(mdates.YearLocator(5))  # Show every 5 years
+    ax.xaxis.set_minor_locator(mdates.YearLocator())  # Minor ticks every year
+    # Rotate x-axis labels for better readability
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
 plt.tight_layout()
 plt.show()
